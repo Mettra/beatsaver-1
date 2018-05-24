@@ -11,183 +11,209 @@ $pagetitle = "BeatSaver - Upload Beat Track";
 //$url = '/(http|https|ftp|ftps)\:\/\/[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,3}(\/\S*)?/';
 //$string= preg_replace($url, '<a href="$0" target="_blank" title="$0">$0</a>', $string);
 //echo $string;
-if(!empty($_POST["beattitle"])){
-echo "<pre>";
-//TEST IF ZIP
-$zipext = (pathinfo($_FILES["fileupload"]['name']))['extension'];
-echo "Filetype: $zipext".PHP_EOL;
-if($zipext != 'zip'){die("You have not uploaded a ZIP file, please check the file and try again");}
 
-$zip = zip_open($_FILES["fileupload"]["tmp_name"]);
+$new_file = !empty($_POST["beattitle"]);
+$replace_file = !empty($_GET["replace_id"]);
 
-if ($zip) {
-//Search 1 -- Look for info.json
-    while ($zip_entry = zip_read($zip)) {
-	echo zip_entry_name($zip_entry) . PHP_EOL;
-        if(strpos(zip_entry_name($zip_entry), "info.json") > 3){
-        if (zip_entry_open($zip, $zip_entry, "r")) {
-	    $rawdata = preg_replace('/[\x00-\x1F\x80-\xFF]/', '', zip_entry_read($zip_entry, zip_entry_filesize($zip_entry)));
-            $json = json_decode($rawdata, TRUE);
-	    echo "Detected Info.json".PHP_EOL."Raw:".$rawdata.PHP_EOL."JSON: ";
-	    var_dump($json);
-            zip_entry_close($zip_entry);
-        }
-	}
+if($replace_file) {
+  //Make sure the song comes from the current user
+  $replace_file = $database->has("beats", [
+  "id" => $_GET["replace_id"],
+  "ownerid" =>  $_SESSION["userdb"][0]["id"]
+  ]);
+
+  if(!$replace_file) {
+    echo "<pre>";
+    echo "Cannot update a song that you don't own!";
+    die();
+  }
+}
+
+if( $new_file || $replace_file ){
+  echo "<pre>";
+
+  //TEST IF ZIP
+  $zipext = (pathinfo($_FILES["fileupload"]['name']))['extension'];
+  echo "Filetype: $zipext".PHP_EOL;
+  if($zipext != 'zip'){die("You have not uploaded a ZIP file, please check the file and try again");}
+
+  $zip = zip_open($_FILES["fileupload"]["tmp_name"]);
+
+  if ($zip) {
+  //Search 1 -- Look for info.json
+      while ($zip_entry = zip_read($zip)) {
+    echo zip_entry_name($zip_entry) . PHP_EOL;
+          if(strpos(zip_entry_name($zip_entry), "info.json") > 3){
+          if (zip_entry_open($zip, $zip_entry, "r")) {
+        $rawdata = preg_replace('/[\x00-\x1F\x80-\xFF]/', '', zip_entry_read($zip_entry, zip_entry_filesize($zip_entry)));
+              $json = json_decode($rawdata, TRUE);
+        echo "Detected Info.json".PHP_EOL."Raw:".$rawdata.PHP_EOL."JSON: ";
+        var_dump($json);
+              zip_entry_close($zip_entry);
+          }
     }
-}
-zip_close($zip);
-//decode json
-if(empty($json["songName"])){die("Missing Song Name, Note: Songname must be longer then three letters and be in a subfolder like SongName/info.json");}
-//if(empty($json["songSubName"])){die("Missing SongSub Name");}
-if(empty($json["authorName"])){die("Missing Author Name in the info.js");}
-if(empty($json["beatsPerMinute"])){die("Missing BPM in the info.js");}
-if(empty($json["coverImagePath"])){die("Missing Cover Image in the zip or info.js");}
-if(empty($json["difficultyLevels"])){die("Missing Difficulty Levels in the info.js");}
+      }
+  }
+  zip_close($zip);
+  //decode json
+  if(empty($json["songName"])){die("Missing Song Name, Note: Songname must be longer then three letters and be in a subfolder like SongName/info.json");}
+  //if(empty($json["songSubName"])){die("Missing SongSub Name");}
+  if(empty($json["authorName"])){die("Missing Author Name in the info.js");}
+  if(empty($json["beatsPerMinute"])){die("Missing BPM in the info.js");}
+  if(empty($json["coverImagePath"])){die("Missing Cover Image in the zip or info.js");}
+  if(empty($json["difficultyLevels"])){die("Missing Difficulty Levels in the info.js");}
 
-$zip2 = zip_open($_FILES["fileupload"]["tmp_name"]);
-if ($zip2) {
-//Search 2 -- Look for coverart // TODO CHECK IMAGE SIZE
-    while ($zip2_entry = zip_read($zip2)) {
-        if(strpos(strtolower(zip_entry_name($zip2_entry)), strtolower($json["coverImagePath"])) !== false){
-        if (zip_entry_open($zip2, $zip2_entry, "r")) {
-            $imgdata = zip_entry_read($zip2_entry, zip_entry_filesize($zip2_entry));
-            zip_entry_close($zip2_entry);
-        }
-        }
-    }
-}
-zip_close($zip2);
-if(empty($imgdata)){die("Failed to Extract Image Data");}
-
-
-/// SCOREBOARD MD5
-
-$rawlvldata = "";
-foreach($json["difficultyLevels"] as $lvlkey => $lvl){
-$zip = zip_open($_FILES["fileupload"]["tmp_name"]);
-if ($zip) {
-    while ($zip_entry = zip_read($zip)) {
-        $path_parts = pathinfo(zip_entry_name($zip_entry));
-        if(strtolower($path_parts['basename']) == strtolower($lvl["jsonPath"])){
-        if (zip_entry_open($zip, $zip_entry, "r")) {
-             $lvldata = zip_entry_read($zip_entry, zip_entry_filesize($zip_entry));
-	     $rawlvldata .= $lvldata;
-	     $lvldata = preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $lvldata);
+  $zip2 = zip_open($_FILES["fileupload"]["tmp_name"]);
+  if ($zip2) {
+  //Search 2 -- Look for coverart // TODO CHECK IMAGE SIZE
+      while ($zip2_entry = zip_read($zip2)) {
+          if(strpos(strtolower(zip_entry_name($zip2_entry)), strtolower($json["coverImagePath"])) !== false){
+          if (zip_entry_open($zip2, $zip2_entry, "r")) {
+              $imgdata = zip_entry_read($zip2_entry, zip_entry_filesize($zip2_entry));
+              zip_entry_close($zip2_entry);
+          }
+          }
+      }
+  }
+  zip_close($zip2);
+  if(empty($imgdata)){die("Failed to Extract Image Data");}
 
 
-unset($diffnotes); unset($notetime); unset($notetype); unset($stats);
+  /// SCOREBOARD MD5
 
-$diffnotes = json_decode($lvldata, TRUE);
-foreach($diffnotes["_notes"] as $key => $row){
-$notetime[] = $row["_time"];
-$notetype[$row["_cutDirection"]] = @$notetype[$row["_cutDirection"]] + 1;
-}
-
-echo "Events: " . count($diffnotes["_events"]).PHP_EOL;
-echo "Notes: " . count($diffnotes["_notes"]).PHP_EOL;
-echo "Walls: " .count($diffnotes["_obstacles"]).PHP_EOL;
-echo "Lenght:" .max($notetime).PHP_EOL;
-
-$stats["time"] = max($notetime);
-$stats["slashstat"] = $notetype;
-$stats["events"] = count($diffnotes["_events"]);
-$stats["notes"] = count($diffnotes["_notes"]);
-$stats["obstacles"] = count($diffnotes["_obstacles"]);
-$json["difficultyLevels"][$lvlkey]["stats"] = $stats;
+  $rawlvldata = "";
+  foreach($json["difficultyLevels"] as $lvlkey => $lvl){
+  $zip = zip_open($_FILES["fileupload"]["tmp_name"]);
+  if ($zip) {
+      while ($zip_entry = zip_read($zip)) {
+          $path_parts = pathinfo(zip_entry_name($zip_entry));
+          if(strtolower($path_parts['basename']) == strtolower($lvl["jsonPath"])){
+          if (zip_entry_open($zip, $zip_entry, "r")) {
+              $lvldata = zip_entry_read($zip_entry, zip_entry_filesize($zip_entry));
+        $rawlvldata .= $lvldata;
+        $lvldata = preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $lvldata);
 
 
-            zip_entry_close($zip_entry);
-        }
-        }
-    }
-}
-zip_close($zip);
-}
+  unset($diffnotes); unset($notetime); unset($notetype); unset($stats);
 
-$findlvl = $database->select("diffmap", [
-        "beatid",
-        "hash",
-        "id"
-], [
-        "hash" => md5($rawlvldata)
-]);
-if(md5($rawlvldata) == "d41d8cd98f00b204e9800998ecf8427e"){die("Upload Error, Unable to Calc the Level ID");}
-if(!empty($findlvl[0]["beatid"])){var_dump($findlvl);die("Song already exists in the database. Please don't upload other people's work!");}
+  $diffnotes = json_decode($lvldata, TRUE);
+  foreach($diffnotes["_notes"] as $key => $row){
+  $notetime[] = $row["_time"];
+  $notetype[$row["_cutDirection"]] = @$notetype[$row["_cutDirection"]] + 1;
+  }
+
+  echo "Events: " . count($diffnotes["_events"]).PHP_EOL;
+  echo "Notes: " . count($diffnotes["_notes"]).PHP_EOL;
+  echo "Walls: " .count($diffnotes["_obstacles"]).PHP_EOL;
+  echo "Lenght:" .max($notetime).PHP_EOL;
+
+  $stats["time"] = max($notetime);
+  $stats["slashstat"] = $notetype;
+  $stats["events"] = count($diffnotes["_events"]);
+  $stats["notes"] = count($diffnotes["_notes"]);
+  $stats["obstacles"] = count($diffnotes["_obstacles"]);
+  $json["difficultyLevels"][$lvlkey]["stats"] = $stats;
 
 
-//////////////
+              zip_entry_close($zip_entry);
+          }
+          }
+      }
+  }
+  zip_close($zip);
+  }
+
+  $findlvl = $database->select("diffmap", [
+          "beatid",
+          "hash",
+          "id"
+  ], [
+          "hash" => md5($rawlvldata)
+  ]);
+  if(md5($rawlvldata) == "d41d8cd98f00b204e9800998ecf8427e"){die("Upload Error, Unable to Calc the Level ID");}
+  if(!empty($findlvl[0]["beatid"])){var_dump($findlvl);die("Song already exists in the database. Please don't upload other people's work!");}
 
 
-$beattitle = htmlentities(substr($_POST["beattitle"], 0, 160), ENT_QUOTES | ENT_HTML5,'ISO-8859-1', true);
-$beatdesc = htmlentities(substr($_POST["beatdesc"], 0, 4096), ENT_QUOTES | ENT_HTML5,'ISO-8859-1', true);
+  //////////////
 
-function gg_filter($text){
-return htmlentities(substr($text, 0, 160), ENT_QUOTES | ENT_HTML5,'ISO-8859-1', true);
-}
+  $path_parts = pathinfo(strtolower($json["coverImagePath"]));
+  $imageFileType  = $path_parts['extension'];
+  if($imageFileType != "jpg" && $imageFileType != "png" && $imageFileType != "jpeg" && $imageFileType != "gif" ) {
+      die("Sorry, only JPG, JPEG, PNG & GIF files are allowed for album art");
+  }
 
-if(strlen($beattitle) < 4){die("Too Start of a Title, Must be longer then 4 letters");}
-if(strlen($beatdesc) < 6){die("Too short of a Desc, Needs to be longer then 6 letters");}
+  if($new_file) {
+    $beattitle = htmlentities(substr($_POST["beattitle"], 0, 160), ENT_QUOTES | ENT_HTML5,'ISO-8859-1', true);
+    $beatdesc = htmlentities(substr($_POST["beatdesc"], 0, 4096), ENT_QUOTES | ENT_HTML5,'ISO-8859-1', true);
 
-// everything is good, database, then img then zip!
-
-$path_parts = pathinfo(strtolower($json["coverImagePath"]));
-$imageFileType  = $path_parts['extension'];
-if($imageFileType != "jpg" && $imageFileType != "png" && $imageFileType != "jpeg" && $imageFileType != "gif" ) {
-    die("Sorry, only JPG, JPEG, PNG & GIF files are allowed for album art");
-}
-
-$database->insert("beats", [
-	"beatname" => "$beattitle",
-	"beattext" => nl2br("$beatdesc"),
-        "uploadtime" => time(),
-	"ownerid" => $_SESSION["userdb"][0]["id"],
-        "songName" => gg_filter($json["songName"]),
-        "songSubName" => gg_filter($json["songSubName"]),
-        "authorName" => gg_filter($json["authorName"]),
-        "beatsPerMinute" => $json["beatsPerMinute"],
-        "difficultyLevels" => json_encode($json["difficultyLevels"]),
-	"img"	=> $imageFileType
-]);
-$uid = $database->id();
-
-$database->insert("diffmap", [
-	"beatid" => $uid,
-	"hash"	=> md5($rawlvldata),
-	"diffmeta" => $json["difficultyLevels"]
-]);
-
-$params = [
-    'index' => 'beats',
-    'type' => 'beats',
-    'id' => $uid,
-    'body' => [
-	"id"	=> $uid,
-        "beatname" => "$beattitle",
-        "beattext" => nl2br("$beatdesc"),
-        "uploadtime" => time(),
-        "ownerid" => $_SESSION["userdb"][0]["id"],
-        "songName" => gg_filter($json["songName"]),
-        "songSubName" => gg_filter($json["songSubName"]),
-        "authorName" => gg_filter($json["authorName"]),
-        "beatsPerMinute" => $json["beatsPerMinute"],
-        "difficultyLevels" => json_encode($json["difficultyLevels"]),
-        "img"   => $imageFileType
-]
-];
-
-$response = $client->index($params);
-
-$target_file = "files/" . $uid . ".zip";
-if (move_uploaded_file($_FILES["fileupload"]["tmp_name"], $target_file)) {
-	file_put_contents("img/$uid.".$imageFileType, $imgdata);
-	header("Location: details.php?id=" . $uid);
-	die();
-    } else {
-        die("Sorry, there was an error uploading your file.");
+    function gg_filter($text){
+    return htmlentities(substr($text, 0, 160), ENT_QUOTES | ENT_HTML5,'ISO-8859-1', true);
     }
 
-}
+    if(strlen($beattitle) < 4){die("Too Start of a Title, Must be longer then 4 letters");}
+    if(strlen($beatdesc) < 6){die("Too short of a Desc, Needs to be longer then 6 letters");}
 
+    // everything is good, database, then img then zip!
+
+    $database->insert("beats", [
+      "beatname" => "$beattitle",
+      "beattext" => nl2br("$beatdesc"),
+            "uploadtime" => time(),
+      "ownerid" => $_SESSION["userdb"][0]["id"],
+            "songName" => gg_filter($json["songName"]),
+            "songSubName" => gg_filter($json["songSubName"]),
+            "authorName" => gg_filter($json["authorName"]),
+            "beatsPerMinute" => $json["beatsPerMinute"],
+            "difficultyLevels" => json_encode($json["difficultyLevels"]),
+      "img"	=> $imageFileType
+    ]);
+    $uid = $database->id();
+
+    $database->insert("diffmap", [
+      "beatid" => $uid,
+      "hash"	=> md5($rawlvldata),
+      "diffmeta" => $json["difficultyLevels"]
+    ]);
+
+    $params = [
+        'index' => 'beats',
+        'type' => 'beats',
+        'id' => $uid,
+        'body' => [
+      "id"	=> $uid,
+            "beatname" => "$beattitle",
+            "beattext" => nl2br("$beatdesc"),
+            "uploadtime" => time(),
+            "ownerid" => $_SESSION["userdb"][0]["id"],
+            "songName" => gg_filter($json["songName"]),
+            "songSubName" => gg_filter($json["songSubName"]),
+            "authorName" => gg_filter($json["authorName"]),
+            "beatsPerMinute" => $json["beatsPerMinute"],
+            "difficultyLevels" => json_encode($json["difficultyLevels"]),
+            "img"   => $imageFileType
+    ]
+    ];
+  }
+  else if($replace_file) {
+    $uid = $_GET["replace_id"];
+
+    $target_file = "files/" . $_GET["replace_id"] . ".zip";
+    if(!file_exists($target_file)) {
+      die("Target file on filesystem doesn't exist!");
+    }
+
+    unlink($target_file);
+  }
+
+  $target_file = "files/" . $uid . ".zip";
+  if (move_uploaded_file($_FILES["fileupload"]["tmp_name"], $target_file)) {
+    file_put_contents("img/$uid.".$imageFileType, $imgdata);
+    header("Location: details.php?id=" . $uid);
+    die();
+  } else {
+      die("Sorry, there was an error uploading your file.");
+  }
+}
 
 
 require("header.php");

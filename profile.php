@@ -51,6 +51,10 @@ if(!empty($brow['id'])){ ?>
 <?php if(!empty($_SESSION["userdb"][0]["id"])){ ?> </a> <?php } ?><br><br>
     <p><a class="btn btn-default" href="<?php echo 'dl.php?id='.$brow['id']; ?>" role="button">Download File</a></p><p>
     <p><a class="btn btn-default" href="<?php echo 'delete.php?id='.$brow['id']; ?>" role="button">Delete Item</a></p><p>
+    <br>
+    <form class="form-signin" action="<?php echo 'upload.php?replace_id='.$brow['id']; ?>" method="post" enctype="multipart/form-data">
+    <p><input type="file" id="InputFile" name="fileupload"><button class="btn btn-default" type="submit">Update Item</button></p><p>
+    </form>
 
 </td>
   </tr>
